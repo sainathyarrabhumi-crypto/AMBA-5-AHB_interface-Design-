@@ -2,30 +2,29 @@
 
 module ahb_top_tb;
 
-    // --- Signals ---
+   
     reg hclk;
     reg hresetn;
 
-    // Client Command Signals
+    
     reg         cmd_start;
     reg         cmd_write;
-    reg         cmd_burst; // <--- NEW: Burst control signal
+    reg         cmd_burst; 
     reg [31:0]  cmd_addr;
     reg [31:0]  cmd_wdata;
     reg         cmd_sec;
     
-    // Outputs from Top
     wire        cmd_done;
     wire        cmd_error;
     wire [31:0] cmd_rdata;
 
-    // --- Instantiate the DUT ---
+   
     ahb_top u_dut (
         .hclk       (hclk),
         .hresetn    (hresetn),
         .cmd_start  (cmd_start),
         .cmd_write  (cmd_write),
-        .cmd_burst  (cmd_burst), // <--- Connect new port
+        .cmd_burst  (cmd_burst), 
         .cmd_addr   (cmd_addr),
         .cmd_wdata  (cmd_wdata),
         .cmd_sec    (cmd_sec),
@@ -34,17 +33,15 @@ module ahb_top_tb;
         .cmd_rdata  (cmd_rdata)
     );
 
-    // --- Clock Generation (100MHz) ---
     initial hclk = 0;
     always #5 hclk = ~hclk;
 
-    // --- Test Sequence ---
     initial begin
-        // 1. Initialize & Reset
+       
         hresetn = 0;
         cmd_start = 0;
         cmd_write = 0;
-        cmd_burst = 0; // Initialize burst to 0
+        cmd_burst = 0; 
         cmd_addr = 0;
         cmd_wdata = 0;
         cmd_sec = 0; 
@@ -55,16 +52,12 @@ module ahb_top_tb;
 
         $display("\n--- Simulation Start ---");
 
-        // -------------------------------------------------------
-        // TEST 1: Single Write 0xCAFEBABE to Address 0x00
-        // -------------------------------------------------------
+      
         $display("[T= %0t] TEST 1: Single Write 0xCAFEBABE to 0x00...", $time);
-        // Arguments: is_write, addr, wdata, is_nonsec, is_burst
+        
         drive_trans(1'b1, 32'h0000_0000, 32'hCAFEBABE, 1'b0, 1'b0); 
 
-        // -------------------------------------------------------
-        // TEST 2: Single Read from Address 0x00
-        // -------------------------------------------------------
+      
         $display("[T= %0t] TEST 2: Reading from Address 0x00...", $time);
         drive_trans(1'b0, 32'h0000_0000, 32'h0, 1'b0, 1'b0); 
 
@@ -73,9 +66,6 @@ module ahb_top_tb;
         else 
             $display("FAIL: Read Data 0x%h != Expected 0xCAFEBABE", cmd_rdata);
 
-        // -------------------------------------------------------
-        // TEST 3: Security Violation
-        // -------------------------------------------------------
         $display("[T= %0t] TEST 3: Attempting Non-Secure Write...", $time);
         drive_trans(1'b1, 32'h0000_0004, 32'hDEADBEEF, 1'b1, 1'b0); 
         
@@ -84,38 +74,28 @@ module ahb_top_tb;
         else
             $display("FAIL: Security violation was missed!");
 
-        // -------------------------------------------------------
-        // TEST 4: INCR4 Burst Write (Pipelined)
-        // -------------------------------------------------------
-        // We trigger ONE command, but the Master will perform 4 writes.
-        // Start Addr: 0x00 -> Writes 0x10
-        // Auto-Incr:  0x04 -> Writes 0x11
-        // Auto-Incr:  0x08 -> Writes 0x12
-        // Auto-Incr:  0x0C -> Writes 0x13
+     
         $display("\n[T= %0t] TEST 4: Starting INCR4 Burst Write at 0x00...", $time);
-        drive_trans(1'b1, 32'h0000_0000, 32'h0000_0010, 1'b0, 1'b1); // is_burst = 1
+        drive_trans(1'b1, 32'h0000_0000, 32'h0000_0010, 1'b0, 1'b1); 
 
-        // -------------------------------------------------------
-        // TEST 5: Verify Burst (Read back all 4 locations)
-        // -------------------------------------------------------
         $display("[T= %0t] TEST 5: Verifying Burst Data...", $time);
         
-        // Read Index 0 (Expect 0x10)
+
         drive_trans(1'b0, 32'h0, 32'h0, 1'b0, 1'b0);
         if(cmd_rdata === 32'h10) $display("PASS: Burst Word 0 Correct (0x10)");
         else $display("FAIL: Burst Word 0 Wrong (Got 0x%h)", cmd_rdata);
 
-        // Read Index 1 (Expect 0x11)
+        
         drive_trans(1'b0, 32'h4, 32'h0, 1'b0, 1'b0);
         if(cmd_rdata === 32'h11) $display("PASS: Burst Word 1 Correct (0x11)");
         else $display("FAIL: Burst Word 1 Wrong (Got 0x%h)", cmd_rdata);
 
-        // Read Index 2 (Expect 0x12)
+       
         drive_trans(1'b0, 32'h8, 32'h0, 1'b0, 1'b0);
         if(cmd_rdata === 32'h12) $display("PASS: Burst Word 2 Correct (0x12)");
         else $display("FAIL: Burst Word 2 Wrong (Got 0x%h)", cmd_rdata);
 
-        // Read Index 3 (Expect 0x13)
+        
         drive_trans(1'b0, 32'hC, 32'h0, 1'b0, 1'b0);
         if(cmd_rdata === 32'h13) $display("PASS: Burst Word 3 Correct (0x13)");
         else $display("FAIL: Burst Word 3 Wrong (Got 0x%h)", cmd_rdata);
@@ -124,33 +104,30 @@ module ahb_top_tb;
         $finish;
     end
 
-    // --- Task to Drive Transactions (Updated for Burst) ---
     task drive_trans;
         input is_write;
         input [31:0] addr;
         input [31:0] wdata;
         input is_nonsec;
-        input is_burst_mode; // <--- NEW ARGUMENT
+        input is_burst_mode;
     begin
-        // Setup command
+        
         @(posedge hclk);
         cmd_start <= 1;
         cmd_write <= is_write;
         cmd_addr  <= addr;
         cmd_wdata <= wdata;
         cmd_sec   <= is_nonsec;
-        cmd_burst <= is_burst_mode; // Drive the burst signal
+        cmd_burst <= is_burst_mode;
 
-        // Clear start next cycle (pulse)
         @(posedge hclk);
         cmd_start <= 0;
-        cmd_burst <= 0; // Clear burst command
+        cmd_burst <= 0; 
 
-        // Wait for Done signal
-        // Note: For a burst, 'cmd_done' will only go high after ALL 4 beats are finished.
         wait(cmd_done);
         @(posedge hclk); 
     end
     endtask
+
 
 endmodule
